@@ -41,25 +41,29 @@ unsigned char receive(void) { // code snippet modified from AVR datasheet
 
 }
 
-int getPulseWidth(int width) { // measure the pulse width of a pulse (from lecture notes)
+unsigned int getPulseWidth(int width) { // measure the pulse width of a pulse (count from rising edge to falling edge)
 
 	TCCR1A = 0; // normal mode
-	TCCR1B = (1 << ICES1) | (0b100 << CS10); // rising edge, same as prescaler as Timer0 (clk/256), no noise canceller
+	TCCR1B = (1 << ICES1) | (TCCR0B & 0b00000111); // capture rising edge, same as prescaler as Timer0
 
 	TIFR1 = (1 << ICF1); // clear ICF1 (The Input Capture Flag)
+	while (!(TIFR1 & (1 << ICF1))); // wait while ICF1 is clear
 
-	while ((TIFR1 & (1 << ICF1)) == 0); // wait while ICF1 is clear
-
-	unsigned char t1 = ICR1L; // rising edge value (ICR, low byte)
-
+	// get the TCNT count at input capture of rising edge
+	// For a 16-bit read, the low byte must be read before the high byte. (ATmega328p Datasheet p91)
+	unsigned int risingEdgeCount = ICR1L;
+	risingEdgeCount += (ICR1H << 8);
 	TIFR1 = (1 << ICF1); // clear ICF1
 
-	TCCR1B = (0 << ICES1) | (0b100 << CS10); // falling edge, same prescaler as Timer0 (clk/256)
+	TCCR1B = (0 << ICES1) | (TCCR0B & 0b00000111); // capture falling edge, same prescaler as Timer0
+	while (!(TIFR1 & (1 << ICF1))); // wait while ICF1 is clear
 
-	while ((TIFR1 & (1 << ICF1)) == 0); // wait while ICF1 is clear
+	// get the TCNT count at input capture of falling edge
+	unsigned int fallingEdgeCount = ICR1L;
+	fallingEdgeCount += (ICR1H << 8);
 	TIFR1 = (1 << ICF1); // clear ICF1
 
-	return ICR1L - t1; // return pulse width (falling edge - rising edge)
+	return fallingEdgeCount - risingEdgeCount; // return pulse width
 
 }
 
@@ -106,12 +110,19 @@ int main() {
 
   DDRD = (1 << PD5); // PD5 (OC0B)
 
-	// store the value received from getPulseWidth and transmit over UART
-	char t1array[3];
-	itoa(getPulseWidth(width), t1array, 10);
+	while (1) {
 
-	for (int i = 0; i < strlen(t1array); i++) {
-		transmit(t1array[i]);
+		// store the value received from getPulseWidth and transmit over UART
+		char t1array[3];
+		itoa(getPulseWidth(width), t1array, 10);
+
+		for (int i = 0; i < strlen(t1array); i++) {
+			transmit(t1array[i]);
+		}
+		transmit('\n');
+		
+		_delay_ms(500);
+		
 	}
 
 }
