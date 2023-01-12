@@ -12,19 +12,19 @@ Clock Select: 100: clk/256 (from prescaler)
 
 int main() {
 
-  TCCR0A =
-        (0b00 << COM0A0) |
+	TCCR0A =
+    	(0b00 << COM0A0) |
         (0b10 << COM0B0) |
         (0b11 << WGM00);  
-  TCCR0B =
+	TCCR0B =
         (0b1 << WGM02) |
         (0b100 << CS00);
 
-  OCR0A = 125-1; // 500Hz (OCR0A = TOP)
-  OCR0B = (125/2)-1; // 50% duty cycle (Update of OCR0B at BOTTOM)
+	OCR0A = 125-1; // 500Hz (OCR0A = TOP)
+	OCR0B = (125/2)-1; // 50% duty cycle (Update of OCR0B at BOTTOM)
 
-  DDRD = (1 << PD5); // PD5 (OC0B)
+	DDRD = (1 << PD5); // PD5 (OC0B)
 
-  while (1);
+	while (1);
 
 }
