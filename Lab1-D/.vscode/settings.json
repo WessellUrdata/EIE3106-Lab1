@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.qml": "javascript",
+        "stm32f10x.h": "c",
+        "stm32f10x_rcc.h": "c",
+        "stm32f1xx.h": "c",
+        "stm32f103xb.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
+}
