@@ -39,7 +39,7 @@ void initTIM3CH1() {
 	
 	TIM_OCInitTypeDef PWMstruct;
 	PWMstruct.TIM_OCMode = TIM_OCMode_PWM1;
-	PWMstruct.TIM_Pulse = 63 - 1;
+	PWMstruct.TIM_Pulse = (125/2) - 1;
 	PWMstruct.TIM_OutputState = TIM_OutputState_Enable;
 	PWMstruct.TIM_OCPolarity = TIM_OCPolarity_High;
 	TIM_OC1Init(TIM3, &PWMstruct);
