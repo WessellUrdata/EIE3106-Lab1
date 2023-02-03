@@ -6,6 +6,8 @@
 #include "stm32f10x.h"
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // TIM3_CH1, PA6, for PWM output
 #define PWMen		 	(RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE))
@@ -17,14 +19,20 @@
 #define ICgpio			GPIOB
 #define ICpin			GPIO_Pin_6
 
+// Welcome message as constant saves RAM and Flash
+#define welcomeMessage 	("Enter integer between 10 and 99 to set as pulse width: ")
+#define reportMessage	("The pulse width is: ")
 
-char welcomeMessage[] = "Enter integer between 10 and 99 to set as pulse width: ";
-static uint8_t welcomeMessage_i = 0;
-bool welcomeOver = false;
+// widthString to store incoming pulse width
+char widthString[2];
 
-volatile unsigned char character;
+unsigned char character;
 
-void PWMinit() {
+char buffer[3] = {'\0'};
+bool pulseHigh = false;
+uint16_t pulseWidth = 0;
+
+void PWMinit(uint8_t width) {
 	
 	// GPIO setup
 	PWMen;
@@ -53,7 +61,7 @@ void PWMinit() {
 	
 	TIM_OCInitTypeDef PWMstruct;
 	PWMstruct.TIM_OCMode = TIM_OCMode_PWM1;
-	PWMstruct.TIM_Pulse = 63 - 1;
+	PWMstruct.TIM_Pulse = width - 1;
 	PWMstruct.TIM_OutputState = TIM_OutputState_Enable;
 	PWMstruct.TIM_OCPolarity = TIM_OCPolarity_High;
 	TIM_OC1Init(TIM3, &PWMstruct);
@@ -113,89 +121,107 @@ void USART2init(void) {
 	//USART2 TX RX
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_AFIO, ENABLE);
 
-	GPIO_InitTypeDef GPIO_InitStructure;
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-  	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
+	GPIO_InitTypeDef GPIOstruct;
+	GPIOstruct.GPIO_Pin = GPIO_Pin_2;
+  	GPIOstruct.GPIO_Speed = GPIO_Speed_2MHz;
+  	GPIOstruct.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_Init(GPIOA, &GPIOstruct);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
-  	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-	GPIO_Init(GPIOA, &GPIO_InitStructure); 
+	GPIOstruct.GPIO_Pin = GPIO_Pin_3;
+  	GPIOstruct.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	GPIO_Init(GPIOA, &GPIOstruct); 
 	
 	//USART2 ST-LINK USB
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2,ENABLE);
+	RCC->APB1ENR |= RCC_APB1ENR_USART2EN; // enable USART2 in RCC_APB1
 	
-	USART_InitTypeDef USART_InitStructure;
+	USART_InitTypeDef USARTstruct;
 	//USART_ClockInitTypeDef USART_ClockInitStructure; 
 	
-	USART_InitStructure.USART_BaudRate = 9600;
-  	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
- 	USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  	USART_InitStructure.USART_Parity = USART_Parity_No;
-  	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+	USARTstruct.USART_BaudRate = 9600;
+  	USARTstruct.USART_WordLength = USART_WordLength_8b;
+ 	USARTstruct.USART_StopBits = USART_StopBits_1;
+  	USARTstruct.USART_Parity = USART_Parity_No;
+  	USARTstruct.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  	USARTstruct.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
 	
-	USART_Init(USART2, &USART_InitStructure);
+	USART_Init(USART2, &USARTstruct);
 	USART_Cmd(USART2, ENABLE);
 	
-	
-	NVIC_InitTypeDef UART_NVICinit;
-	// Enable the USART2 TX Interrupt 
-	USART_ITConfig(USART2, USART_IT_TC, ENABLE );
-	UART_NVICinit.NVIC_IRQChannel = USART2_IRQn;
-	UART_NVICinit.NVIC_IRQChannelPreemptionPriority = 0;
-	UART_NVICinit.NVIC_IRQChannelSubPriority = 0;
-	UART_NVICinit.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&UART_NVICinit);
-	// Enable the USART2 RX Interrupt
-	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE );
-	UART_NVICinit.NVIC_IRQChannel = USART2_IRQn;
-	UART_NVICinit.NVIC_IRQChannelPreemptionPriority = 0;
-	UART_NVICinit.NVIC_IRQChannelSubPriority = 0;
-	UART_NVICinit.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&UART_NVICinit);
+}
+
+void transmit(uint16_t Data) { // modified from USART_SendData func, hard-coded for USART2
+
+	// Wait for empty transmit buffer
+	while (!(USART2->SR & USART_SR_TXE));
+
+	// Transmit Data
+	USART2->DR = (Data & (uint16_t)0x01FF);
+
+}
+
+unsigned char receive() { // modified from USART_ReceiveData, hard-coded for USART2
+
+	// Wait for data to be received
+	while (!(USART2->SR & USART_SR_RXNE));
+
+	// Get and return received data from buffer
+	return (unsigned char)(USART2->DR & (uint16_t)0x01FF);
 
 }
 
 int main() {
 
 	USART2init();
-	PWMinit();
+
+	for (int i = 0; i < strlen(welcomeMessage); i++) {
+		transmit(welcomeMessage[i]);
+	}
+
+	char receivedInt[2];
+	for (int i = 0; i < 2; i++) {
+		receivedInt[i] = receive();
+		transmit(receivedInt[i]);
+	}
+	transmit('\n');
+
+	uint8_t setPulseWidth = (receivedInt[0] - 0x30) * 10 + (receivedInt[1] - 0x30);
+	PWMinit(setPulseWidth);
+
 	ICinit();
 
+
 	while (1) {
-		
-	}
-}
-
-void USART2_IRQHandler() {
-
-	if (USART_GetITStatus(USART2, USART_IT_TC) != RESET) {
-
-		if (welcomeMessage_i < strlen(welcomeMessage)) {
-			USART_SendData(USART2, welcomeMessage[welcomeMessage_i++]);
-		} 
-		else if (welcomeMessage_i == strlen(welcomeMessage)) {
-			welcomeOver = true;
-		}
-
-		USART_ClearITPendingBit(USART2, USART_IT_TC);
 
 	}
-
-	if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET) {
-
-		character = (unsigned char) USART_ReceiveData(USART2);
-		USART_SendData(USART2, character);
-
-		USART_ClearITPendingBit(USART2, USART_IT_RXNE);
-
-
-	}
-
 }
 
 void TIM4_IRQHandler(void) {
+
+	if (TIM4->DIER & TIM_DIER_CC1IE && TIM4->SR & TIM_SR_CC1IF) { // if CC1 interrupt enabled and flag set
+
+		if (!pulseHigh) {
+			pulseHigh = true; // pulse starts
+			TIM4->CNT = 0;
+			TIM4->CCER |= TIM_CCER_CC1P; // change to detect falling
+
+		} else {
+			pulseWidth += TIM4->CNT + 1;
+			TIM4->CCER &= ~TIM_CCER_CC1P; // change to detect raising
+			
+			buffer[0] = (pulseWidth / 10) + 0x30;
+			buffer[1] = (pulseWidth % 10) + 0x30;
+
+			for (int i = 0; i < strlen(reportMessage); i++) transmit(reportMessage[i]);
+			for (int i = 0; i < strlen(buffer); i++) transmit(buffer[i]);
+			transmit('\r');
+
+			pulseHigh = false;
+			pulseWidth = 0;
+		}
+
+	}
+
+	//Clear interrupt flag
+	TIM4->SR = ~TIM_SR_CC1IF;
 
 }
