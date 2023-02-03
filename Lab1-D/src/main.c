@@ -23,12 +23,6 @@
 #define welcomeMessage 	("Enter integer between 10 and 99 to set as pulse width: ")
 #define reportMessage	("The pulse width is: ")
 
-// widthString to store incoming pulse width
-char widthString[2];
-
-unsigned char character;
-
-char buffer[3] = {'\0'};
 bool pulseHigh = false;
 uint16_t pulseWidth = 0;
 
@@ -173,9 +167,7 @@ int main() {
 
 	USART2init();
 
-	for (int i = 0; i < strlen(welcomeMessage); i++) {
-		transmit(welcomeMessage[i]);
-	}
+	for (int i = 0; i < strlen(welcomeMessage); i++) transmit(welcomeMessage[i]);
 
 	char receivedInt[2];
 	for (int i = 0; i < 2; i++) {
@@ -189,7 +181,6 @@ int main() {
 
 	ICinit();
 
-
 	while (1) {
 
 	}
@@ -200,14 +191,17 @@ void TIM4_IRQHandler(void) {
 	if (TIM4->DIER & TIM_DIER_CC1IE && TIM4->SR & TIM_SR_CC1IF) { // if CC1 interrupt enabled and flag set
 
 		if (!pulseHigh) {
-			pulseHigh = true; // pulse starts
 			TIM4->CNT = 0;
 			TIM4->CCER |= TIM_CCER_CC1P; // change to detect falling
 
+			pulseHigh = true; // high pulse starts
+
 		} else {
-			pulseWidth += TIM4->CNT + 1;
+			pulseWidth += TIM4->CNT;
 			TIM4->CCER &= ~TIM_CCER_CC1P; // change to detect raising
 			
+			// convert pulseWidth int to charArray and report/transmit over UART
+			char buffer[2];
 			buffer[0] = (pulseWidth / 10) + 0x30;
 			buffer[1] = (pulseWidth % 10) + 0x30;
 
@@ -215,8 +209,8 @@ void TIM4_IRQHandler(void) {
 			for (int i = 0; i < strlen(buffer); i++) transmit(buffer[i]);
 			transmit('\r');
 
-			pulseHigh = false;
 			pulseWidth = 0;
+			pulseHigh = false; // high pulse ends (reset)
 		}
 
 	}
