@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "*.qml": "javascript",
+        "stdio.h": "c"
+    }
+}
