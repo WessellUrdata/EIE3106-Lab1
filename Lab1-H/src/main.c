@@ -74,7 +74,6 @@ void PWMinit() {
 	TIM3->EGR |= TIM_EGR_UG; // Update registers of TIM3
 	TIM3->CR1 |= TIM_CR1_CEN | TIM_CR1_ARPE; // Enable Clock
 	
-
 }
 
 /*
@@ -129,7 +128,6 @@ void ADC1init() {
 	ADC1->CR2 |= ADC_CR2_CAL;
 	while (ADC1->CR2 & ADC_CR2_CAL); // while it's still calibrating
 
-
 }
 
 void DMA1init() { // DMA1_CH1 for ADC1
@@ -145,8 +143,7 @@ void DMA1init() { // DMA1_CH1 for ADC1
 	// Memory-to-Memory disabled, Channel priority High, Memory/Peripheral Size 16-bit
 	// DMA Memory Increment enable, DMA Periphearl Increment disabled, Circular mode
 	// Direction: Read from Peripheral, Transfer Complete Interrupt enable, Channel enable
-	// DMA1_Channel1->CCR = DMA_CCR_PL_1 | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_MINC | DMA_CCR_CIRC | DMA_CCR_TCIE | DMA_CCR_EN;
-	DMA1_Channel1->CCR = (0x2UL << (12U)) | (0x1UL << (10U)) | (0x1UL << (8U)) | (0x1UL << (7U)) | (0x1UL << (5U)) | (0x1UL << (1U)) | (0x1UL);
+	DMA1_Channel1->CCR = DMA_CCR_PL_1 | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_MINC | DMA_CCR_CIRC | DMA_CCR_TCIE | DMA_CCR_EN;
 
 	// NVIC setup
 	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
@@ -192,13 +189,14 @@ int main() {
 	}
 }
 
-void DMA1_Channel1_IRQHandler(void)
-{
-	//Test on DMA1 Channel1 Transfer Complete interrupt
+void DMA1_Channel1_IRQHandler() {
+
+	// Test if DMA's ADC channel has finished transfer
 	if (DMA1->ISR & DMA_ISR_TCIF1) {
 		status = 1;
 
 		// Clear DMA1 interrupt pending bits
 		DMA1->IFCR |= DMA_IFCR_CGIF1;
 	}
+	
 }
