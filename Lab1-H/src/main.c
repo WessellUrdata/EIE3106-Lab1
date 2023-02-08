@@ -1,42 +1,38 @@
-// The SPL included in this project has to be added to PlatformIO following the instructions in this forum post:
-// https://community.platformio.org/t/stm32-standard-library/7086/15
-// Since it hasn't been added to the mainline
-// Otherwise, it won't work
-
 #include "stm32f1xx.h"
 #include <string.h>
+#include <stdio.h>
 
-void USART2init(void) {
+volatile uint16_t ADC_values[3];
 
-	// USART2 TX (PA2) RX (PA3)
+void USART2init(void) { // transmit only
+
+	// USART2 TX-only (PA2)
 	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_AFIOEN; // enable PORTA and AFIO in RCC_APB2
 
 	// PA2 / Mode 10: Output 2MHz / Config 10: Alt Func Push Pull
-	// PA3 / Mode 00: Input / Config 01: Input Floating
 	uint32_t tempGPIOACRL = GPIOA->CRL;
-	tempGPIOACRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2 | GPIO_CRL_MODE3 | GPIO_CRL_CNF3);
-	tempGPIOACRL |= GPIO_CRL_MODE2_1 | GPIO_CRL_CNF2_1 | GPIO_CRL_CNF3_0;
+	tempGPIOACRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2);
+	tempGPIOACRL |= GPIO_CRL_MODE2_1 | GPIO_CRL_CNF2_1;
 	GPIOA->CRL = tempGPIOACRL;
 	
-	// USART2 ST-LINK USB
+	// USART2
 	RCC->APB1ENR |= RCC_APB1ENR_USART2EN; // enable USART2 in RCC_APB1
 
-	// USART2 / 115200 baud / 8 bit word length / 1 stop bit / no parity / no flow control / TX-RX mode
+	// USART2 / 115200 baud / 8 bit word length / 1 stop bit / no parity / no flow control / TX mode
 	// Fraction part (4-bit): 36,000,000Hz/Baud/16
 	// Mantissa part (12-bit): the remainder of 36,000,000Hz/Baud/16 multiplied by 16
 	USART2->BRR |= (19 << 4) | (9 & USART_BRR_DIV_Fraction);
-	USART2->CR1 |= USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
+	USART2->CR1 |= USART_CR1_UE | USART_CR1_TE;
 	
 }
 
 void transmit(uint8_t Data) { // hard-coded for USART2
-
-	// Wait for empty transmit buffer
-	while (!(USART2->SR & USART_SR_TXE));
-
-	// Transmit Data
+	while (!(USART2->SR & USART_SR_TXE)); // wait until Transmit Data Register Empty
 	USART2->DR = (Data & 0xFF);
+}
 
+void transmitString(char Data[]) {
+	for (int i = 0; i < strlen(Data); i++) transmit(Data[i]);
 }
 
 /*
@@ -45,7 +41,7 @@ TIM3_CH1: PA6 / Red
 TIM3_CH2: PA7 / Green
 TIM3_CH3: PB0 / Blue
 */
-void PWMinit(uint8_t width) {
+void PWMinit() {
 	
 	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_AFIOEN;  // enable PORTA, PORTB and AFIO in RCC_APB2
 
@@ -68,7 +64,6 @@ void PWMinit(uint8_t width) {
 
 	TIM3->PSC = 1152 - 1;
 	TIM3->ARR = 125 - 1;
-	TIM3->CCR1 = TIM3->CCR2 = TIM3->CCR3 = width - 1; // Compare target
 	
 	// PWM setup
 	// For TIM3_CH1, TIM3_CH2, TIM3_CH3: Output Compare 1 Mode: 110/PWM1 & enable Preload
@@ -88,7 +83,7 @@ ADC_0: PA0 / Red
 ADC_1: PA1 / Green
 ADC_4: PA4 / Blue
 */
-void ADCinit() {
+void ADC1init() {
 
 	// set prescaler for ADC
 	// ADC clock cannot exceed 14MHz, so we'll select a prescaler of 6 (72MHz/6 = 12MHz)
@@ -97,8 +92,9 @@ void ADCinit() {
 	// enable ADC1 in APB2
 	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
 
-	// Reset ADC1 to its power-on default
+	// Reset ADC1 to by turning it off and on again
 	RCC->APB2RSTR |= RCC_APB2RSTR_ADC1RST;
+	RCC->APB2RSTR &= ~(RCC_APB2RSTR_ADC1RST);
 
 	// PA0, PA1, PA4
 	// Mode 00: Input / Config 00: Analog In
@@ -111,14 +107,14 @@ void ADCinit() {
 	tempADC1CR1 |= ADC_CR1_SCAN;
 	ADC1->CR1 = tempADC1CR1;
 
-	// Continuous Conversion enable, External trigger disabled (SWSTART), DMA enabled
-	ADC1->CR2 |= ADC_CR2_CONT | ADC_CR2_SWSTART | ADC_CR2_DMA;
+	// Continuous Conversion enable, External trigger disabled (SWSTART / 111), DMA enabled
+	ADC1->CR2 |= ADC_CR2_CONT | ADC_CR2_EXTSEL_2 | ADC_CR2_EXTSEL_1 | ADC_CR2_EXTSEL_0 | ADC_CR2_DMA;
 
-	// 3 regular channels
-	ADC1->SQR1 |= (3-1 << ADC_SQR1_L_Pos);
+	// 3 regular channels (3 - 1 = 0b10)
+	ADC1->SQR1 |= ( (3-1) << ADC_SQR1_L_Pos);
 
 	// Set sampling time at 239.5 cycles for ADC_0, ADC_1, ADC_4
-	ADC1->SMPR2 = (ADC_SMPR2_SMP0_Msk | ADC_SMPR2_SMP1_Msk | ADC_SMPR2_SMP1_Msk);
+	ADC1->SMPR2 = (ADC_SMPR2_SMP0_Msk | ADC_SMPR2_SMP1_Msk | ADC_SMPR2_SMP4_Msk);
 
 	// Set ADC conversion sequence
 	// Red (ADC_0) first, Green (ADC_1) second, Blue (ADC_4) third
@@ -133,9 +129,31 @@ void ADCinit() {
 	ADC1->CR2 |= ADC_CR2_CAL;
 	while (ADC1->CR2 & ADC_CR2_CAL); // while it's still calibrating
 
+
 }
 
-void clockSetup() {
+void DMA1init() { // DMA1_CH1 for ADC1
+
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN; // enable DMA1 in RCC_AHB
+	
+	DMA1_Channel1->CNDTR = 3; // Buffer size = 3
+
+	DMA1_Channel1->CPAR = (uint32_t)&ADC1->DR; // Peripheral Base Address = ADC1_DR
+
+	DMA1_Channel1->CMAR = (uint32_t)ADC_values; // Memory Base Address = ADC_values
+
+	// Memory-to-Memory disabled, Channel priority High, Memory/Peripheral Size 16-bit
+	// DMA Memory Increment enable, DMA Periphearl Increment disabled, Circular mode
+	// Direction: Read from Peripheral, Transfer Complete Interrupt enable, Channel enable
+	// DMA1_Channel1->CCR = DMA_CCR_PL_1 | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_MINC | DMA_CCR_CIRC | DMA_CCR_TCIE | DMA_CCR_EN;
+	DMA1_Channel1->CCR = (0x2UL << (12U)) | (0x1UL << (10U)) | (0x1UL << (8U)) | (0x1UL << (7U)) | (0x1UL << (5U)) | (0x1UL << (1U)) | (0x1UL);
+
+	// NVIC setup
+	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+void clockSetup() { // function to boost system clock to 72MHz and APB1 to 36MHz
 	RCC->CFGR = RCC_CFGR_PLLMULL9 | RCC_CFGR_PLLSRC | RCC_CFGR_PPRE1_DIV2 ; // PLL * 9 = 72MHz, PLL clock source = HSE, APB1 = 72MHz / 2 = 36MHz
 	RCC->CR |= RCC_CR_HSEON; // enable HSE clock
 	while (!(RCC->CR & RCC_CR_HSERDY)); // wait until HSE ready
@@ -147,12 +165,40 @@ void clockSetup() {
 	RCC->CR &= ~RCC_CR_HSION; // turn off internal 8MHz internal high-speed clock
 }
 
+volatile uint8_t status = 0;
+
 int main() {
 
-	// clockSetup();
+	clockSetup();
+	PWMinit();
 	USART2init();
+	ADC1init();
+	DMA1init();
 
-	PWMinit(120);
+	ADC1->CR2 |= ADC_CR2_SWSTART | ADC_CR2_EXTTRIG; // Start software conversion (SWSTART is an external trigger)
 
-	while (1);
+	char buffer[50];
+
+	while (1) {
+		while(!status);
+		sprintf(buffer, "ch0=%d ch1=%d ch4=%d\r\n", ADC_values[0], ADC_values[1], ADC_values[2]);
+		transmitString(buffer);
+
+		// The threshhold is set to 1500, you may adjust it for different photoresistors
+		TIM3->CCR1 = ADC_values[0] > 1500 ? 125 : 0;
+		TIM3->CCR2 = ADC_values[1] > 1500 ? 125 : 0;
+		TIM3->CCR3 = ADC_values[2] > 1500 ? 125 : 0;
+		status = 0;
+	}
+}
+
+void DMA1_Channel1_IRQHandler(void)
+{
+	//Test on DMA1 Channel1 Transfer Complete interrupt
+	if (DMA1->ISR & DMA_ISR_TCIF1) {
+		status = 1;
+
+		// Clear DMA1 interrupt pending bits
+		DMA1->IFCR |= DMA_IFCR_CGIF1;
+	}
 }
