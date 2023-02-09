@@ -141,7 +141,7 @@ void DMA1init() { // DMA1_CH1 for ADC1
 	DMA1_Channel1->CMAR = (uint32_t)ADC_values; // Memory Base Address = ADC_values
 
 	// Memory-to-Memory disabled, Channel priority High, Memory/Peripheral Size 16-bit
-	// DMA Memory Increment enable, DMA Periphearl Increment disabled, Circular mode
+	// DMA Memory Increment enable, DMA Peripheral Increment disabled, Circular mode
 	// Direction: Read from Peripheral, Transfer Complete Interrupt enable, Channel enable
 	DMA1_Channel1->CCR = DMA_CCR_PL_1 | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_MINC | DMA_CCR_CIRC | DMA_CCR_TCIE | DMA_CCR_EN;
 
