@@ -21,7 +21,7 @@ void USART2init(void) { // transmit only
 	// USART2 / 115200 baud / 8 bit word length / 1 stop bit / no parity / no flow control / TX mode
 	// Fraction part (4-bit): 36,000,000Hz/Baud/16
 	// Mantissa part (12-bit): the remainder of 36,000,000Hz/Baud/16 multiplied by 16
-	USART2->BRR |= (19 << 4) | (9 & USART_BRR_DIV_Fraction);
+	USART2->BRR |= (19 << USART_BRR_DIV_Mantissa_Pos) | (9 << USART_BRR_DIV_Fraction_Pos);
 	USART2->CR1 |= USART_CR1_UE | USART_CR1_TE;
 	
 }
